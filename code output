@@ -1,0 +1,44 @@
+17:45:45.063 -> Step 1: Resetting M90E36A
+17:45:45.157 -> Hardware Reset Complete
+17:45:45.157 -> 
+17:45:45.157 -> Step 2: Soft Reset and Configuration (Mode 3, 100 kHz)
+17:45:45.157 -> Write Address: 0x0, Data: 0x789A
+17:45:45.247 -> Write Address: 0x30, Data: 0x5678
+17:45:45.247 -> Read Address: 0x800F
+17:45:45.294 -> LastSPIData after ConfigStart: 0x5678
+17:45:45.294 -> LastSPIData matches ConfigStart: SUCCESS
+17:45:45.294 -> 
+17:45:45.294 -> Step 3: Checking SysStatus0 (0x001)
+17:45:45.294 -> Read Address: 0x8001
+17:45:45.294 -> SysStatus0: 0xFFFF
+17:45:45.294 -> ERROR: Checksum Error (CS0Err-CS3Err)
+17:45:45.294 -> 
+17:45:45.294 -> Step 4: Testing FuncEn0 (0x002) Read
+17:45:45.294 -> Read Address: 0x8003
+17:45:45.294 -> FuncEn0: 0x0
+17:45:45.294 -> WARNING: FuncEn0 read all 0s or FFs, possible M90E36A non-response
+17:45:45.294 -> 
+17:45:45.294 -> Step 5: Testing PMConfig (0x18) Write/Read
+17:45:45.294 -> Write Address: 0x1B, Data: 0x8001
+17:45:45.294 -> Read Address: 0x800F
+17:45:45.294 -> LastSPIData after PMConfig write: 0x8001
+17:45:45.294 -> Read Address: 0x801B
+17:45:45.294 -> Read PMConfig: 0x8000
+17:45:45.340 -> PMConfig write/read test: SUCCESS
+17:45:45.340 -> 
+17:45:45.340 -> Step 6: Testing MMode0 (0x33) Write/Read
+17:45:45.340 -> Write Address: 0x33, Data: 0x185
+17:45:45.340 -> Read Address: 0x800F
+17:45:45.340 -> LastSPIData after MMode0 write: 0x185
+17:45:45.340 -> Read Address: 0x8033
+17:45:45.340 -> Read MMode0: 0x185
+17:45:45.340 -> MMode0 write/read test: SUCCESS
+17:45:45.340 -> 
+17:45:45.340 -> Step 7: Testing PMConfig with 50 kHz, Mode 0
+17:45:45.340 -> Write Address: 0x1B, Data: 0x8001
+17:45:45.340 -> Read Address: 0x800F
+17:45:45.340 -> LastSPIData after PMConfig write: 0x8001
+17:45:45.340 -> Read Address: 0x801B
+17:45:45.340 -> Read PMConfig: 0x8000
+17:45:45.340 -> PMConfig write/read (Mode 0, 50 kHz): SUCCESS
+17:45:45.387 ->
