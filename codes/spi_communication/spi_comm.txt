@@ -1,0 +1,167 @@
+#include <SPI.h>
+
+// SPI Pins for ESP32 (Master Mode)
+#define CS_PIN 5      // Chip Select (Pin 43)
+#define MOSI_PIN 23   // Master Out Slave In (Pin 42, SDI)
+#define MISO_PIN 19   // Master In Slave Out (Pin 40, SDO)
+#define SCLK_PIN 18   // Serial Clock (Pin 41, SCLK)
+#define RESET_PIN 15  // RESET (Pin 44, active-low)
+
+// M90E36A Register Addresses (from Application Note)
+#define SoftReset 0x000     // Software Reset
+#define ConfigStart 0x030   // Configuration Start
+#define PMConfig 0x01b      // Partial Measurement Configuration
+#define LastSPIData 0x00F   // Last SPI Data
+#define SysStatus0 0x001    // System Status
+#define MMode0 0x033        // Metering Method Configuration
+#define FuncEn0 0x003       // Function Enable 0
+
+// SPI Settings (configurable for testing)
+SPISettings spiSettingsDefault(10000, MSBFIRST, SPI_MODE3); // 10 kHz, Mode 3
+SPISettings spiSettingsAlt(5000, MSBFIRST, SPI_MODE0);      // 5 kHz, Mode 0
+
+void setup() {
+  // Initialize Serial for debugging
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("=== M90E36A SPI Diagnostic Test ===");
+  Serial.println("Power Mode: Normal (PM1=1, PM0=1, Pins 45/46 to 3.3V)");
+  Serial.println("RESET Pin: GPIO15 (Pin 44, active-low)");
+  Serial.println("SPI Default: 100 kHz, Mode 3");
+
+  // Initialize RESET Pin
+  pinMode(RESET_PIN, OUTPUT);
+  digitalWrite(RESET_PIN, HIGH); // Deassert reset (active-low)
+  pinMode(CS_PIN, OUTPUT);
+  digitalWrite(CS_PIN, HIGH); // Deselect chip
+
+  // Initialize SPI
+  SPI.begin(SCLK_PIN, MISO_PIN, MOSI_PIN, CS_PIN);
+
+  // Step 1: Reset M90E36A
+  Serial.println("\nStep 1: Resetting M90E36A");
+  digitalWrite(RESET_PIN, LOW);
+  delay(10);
+  digitalWrite(RESET_PIN, HIGH);
+  delay(100); // Wait for chip stabilization
+  Serial.println("Hardware Reset Complete");
+
+  // Step 2: Soft Reset and Configuration
+  Serial.println("\nStep 2: Soft Reset and Configuration (Mode 3, 100 kHz)");
+  writeRegister(SoftReset, 0x789A, spiSettingsDefault); // Soft reset
+  delay(100);
+  writeRegister(ConfigStart, 0x5678, spiSettingsDefault); // Start configuration
+  uint16_t lastData = readRegister(LastSPIData, spiSettingsDefault);
+  Serial.print("LastSPIData after ConfigStart: 0x");
+  Serial.println(lastData, HEX);
+  if (lastData == 0x5678) {
+    Serial.println("LastSPIData matches ConfigStart: SUCCESS");
+  } else {
+    Serial.println("LastSPIData mismatch: SPI write failure");
+  }
+
+  // Step 3: Check System Status
+  Serial.println("\nStep 3: Checking SysStatus0 (0x001)");
+  uint16_t status = readRegister(SysStatus0, spiSettingsDefault);
+  Serial.print("SysStatus0: 0x");
+  Serial.println(status, HEX);
+  if (status & 0xF000) {
+    Serial.println("ERROR: Checksum Error (CS0Err-CS3Err)");
+  } else {
+    Serial.println("SysStatus0: No checksum errors");
+  }
+
+  // Step 4: Test FuncEn0 (basic register read)
+  Serial.println("\nStep 4: Testing FuncEn0 (0x002) Read");
+  uint16_t funcEn0 = readRegister(FuncEn0, spiSettingsDefault);
+  Serial.print("FuncEn0: 0x");
+  Serial.println(funcEn0, HEX);
+  if (funcEn0 == 0xFFFF || funcEn0 == 0x0000) {
+    Serial.println("WARNING: FuncEn0 read all 0s or FFs, possible M90E36A non-response");
+  } else {
+    Serial.println("FuncEn0 read: SUCCESS");
+  }
+
+  // Step 5: Test PMConfig Write/Read
+  Serial.println("\nStep 5: Testing PMConfig (0x18) Write/Read");
+  uint16_t testValue = 0x8001; // ReMeasure=1
+  writeRegister(PMConfig, testValue, spiSettingsDefault);
+  lastData = readRegister(LastSPIData, spiSettingsDefault);
+  Serial.print("LastSPIData after PMConfig write: 0x");
+  Serial.println(lastData, HEX);
+  uint16_t readValue = readRegister(PMConfig, spiSettingsDefault);
+  Serial.print("Read PMConfig: 0x");
+  Serial.println(readValue, HEX);
+  if ((readValue & 0xFFFE) == (testValue & 0xFFFE)) {
+    Serial.println("PMConfig write/read test: SUCCESS");
+  } else {
+    Serial.println("PMConfig write/read test: FAILED");
+  }
+
+  // Step 6: Test MMode0 Write/Read
+  Serial.println("\nStep 6: Testing MMode0 (0x33) Write/Read");
+  testValue = 0x0185; // 3P4W, 50 Hz, CT sampling
+  writeRegister(MMode0, testValue, spiSettingsDefault);
+  lastData = readRegister(LastSPIData, spiSettingsDefault);
+  Serial.print("LastSPIData after MMode0 write: 0x");
+  Serial.println(lastData, HEX);
+  readValue = readRegister(MMode0, spiSettingsDefault);
+  Serial.print("Read MMode0: 0x");
+  Serial.println(readValue, HEX);
+  if (readValue == testValue) {
+    Serial.println("MMode0 write/read test: SUCCESS");
+  } else {
+    Serial.println("MMode0 write/read test: FAILED");
+  }
+
+  // Step 7: Test with Alternate SPI Settings (50 kHz, Mode 0)
+  Serial.println("\nStep 7: Testing PMConfig with 50 kHz, Mode 0");
+  testValue = 0x8001;
+  writeRegister(PMConfig, testValue, spiSettingsAlt);
+  lastData = readRegister(LastSPIData, spiSettingsAlt);
+  Serial.print("LastSPIData after PMConfig write: 0x");
+  Serial.println(lastData, HEX);
+  readValue = readRegister(PMConfig, spiSettingsAlt);
+  Serial.print("Read PMConfig: 0x");
+  Serial.println(readValue, HEX);
+  if ((readValue & 0xFFFE) == (testValue & 0xFFFE)) {
+    Serial.println("PMConfig write/read (Mode 0, 50 kHz): SUCCESS");
+  } else {
+    Serial.println("PMConfig write/read (Mode 0, 50 kHz): FAILED");
+  }
+
+  Serial.println("\n=== Diagnostic Complete ===");
+  Serial.println("Review output and check hardware if failures persist.");
+}
+
+void loop() {
+  Serial.println("Diagnostic Complete. Restart ESP32 to re-run.");
+  delay(10000);
+}
+
+// Write to M90E36A register
+void writeRegister(uint16_t regAddr, uint16_t data, SPISettings settings) {
+  SPI.beginTransaction(settings);
+  digitalWrite(CS_PIN, LOW);
+  Serial.print("Write Address: 0x");
+  Serial.print(regAddr & 0x7FFF, HEX);
+  Serial.print(", Data: 0x");
+  Serial.println(data, HEX);
+  SPI.transfer16(regAddr & 0x7FFF); // Write mode: MSB=0
+  SPI.transfer16(data);
+  digitalWrite(CS_PIN, HIGH);
+  SPI.endTransaction();
+}
+
+// Read from M90E36A register
+uint16_t readRegister(uint16_t regAddr, SPISettings settings) {
+  SPI.beginTransaction(settings);
+  digitalWrite(CS_PIN, LOW);
+  Serial.print("Read Address: 0x");
+  Serial.println(regAddr | 0x8000, HEX);
+  SPI.transfer16(regAddr | 0x8000); // Read mode: MSB=1
+  uint16_t data = SPI.transfer16(0xFFFF);
+  digitalWrite(CS_PIN, HIGH);
+  SPI.endTransaction();
+  return data;
+}
